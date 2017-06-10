@@ -290,7 +290,7 @@ function evaluate(b = board) {
     return sum;
 }
 let kingWeight = 1.9;
-let depth = 6;
+let depth = 5;
 function miniMax(moveSet, d = (depth + 1)) {
     d -= 1;
     let results = [];

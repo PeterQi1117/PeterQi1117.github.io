@@ -50,7 +50,7 @@ function drawBoard() {
     //context.shadowOffsetY = 0;
     for (let x = 0; x <= 7; x++) {
         for (let y = 0; y <= 7; y++) {
-            if ((x + y) % 2 == 0) {
+            if ((x + y) % 2 === 0) {
                 contextBoard.fillStyle = lightSquareColor; //'rgb(210,230,212)'
             } else {
                 contextBoard.fillStyle = darkSquareColor;
@@ -139,7 +139,7 @@ function drawPiece(x, y, color, raw_coords = false, radiusMultiplier = 1, animat
 }
 function drawPieces(positionsArray) {
     for (let square = 0; square <= 31; square++) {
-        if (Math.floor(square / 4) % 2 != 0) {
+        if (Math.floor(square / 4) % 2 !== 0) {
             drawPiece(2 * (square % 4), Math.floor(square / 4), positionsArray[square]);
         } else {
             drawPiece(2 * (square % 4) + 1, Math.floor(square / 4), positionsArray[square]);
@@ -160,9 +160,9 @@ function squareFromPosition(x_coord, y_coord) {
     }
 }
 function indexFromSquare(x, y) {
-    if (y == 0) {
+    if (y === 0) {
         return Math.floor(x / 2)
-    } else if (y % 2 != 0) {
+    } else if (y % 2 !== 0) {
         return 4 * y - 1 + (x / 2) + 1
     } else {
         return 4 * y - 1 + Math.ceil(x / 2)
@@ -171,14 +171,14 @@ function indexFromSquare(x, y) {
 
 function findIntermediary(origin, target) {
     let addNumber;
-    if (Math.abs(origin - target) == 7) {
-        if (Math.floor(origin / 4) % 2 == 0) {
+    if (Math.abs(origin - target) === 7) {
+        if (Math.floor(origin / 4) % 2 === 0) {
             addNumber = 4
         } else {
             addNumber = 3
         }
     } else {
-        if (Math.floor(origin / 4) % 2 == 0) {
+        if (Math.floor(origin / 4) % 2 === 0) {
             addNumber = 5
         } else {
             addNumber = 4
@@ -195,9 +195,9 @@ function mouseDown(event) {
     document.removeEventListener('keydown', keyDown);
     let mousePosition = getMousePosition(event);
     let square = squareFromPosition(mousePosition.x, mousePosition.y);
-    if ((square.x + square.y) % 2 != 0) {
+    if ((square.x + square.y) % 2 !== 0) {
         let index = dragIndex = indexFromSquare(square.x, square.y);
-        if (board[index] != 0) {
+        if (board[index] !== 0) {
             canvasPieceHeld.addEventListener('mousemove', mouseMove);
             document.addEventListener('mouseup', mouseUp);
             tempBoard = board.slice(0);
@@ -220,11 +220,11 @@ function mouseUp(event) {
     canvasPieceHeld.removeEventListener('mouseup', mouseUp);
     let mousePosition = getMousePosition(event);
     let square = squareFromPosition(mousePosition.x, mousePosition.y);
-    if ((square.x + square.y) % 2 != 0) {
+    if ((square.x + square.y) % 2 !== 0) {
         dropIndex = indexFromSquare(square.x, square.y);
         // post message check move validity
         if (validMoves.some(function (move) {
-                return (move[0] == dragIndex && move[move.length - 1] == dropIndex)
+                return (move[0] === dragIndex && move[move.length - 1] === dropIndex)
             })
             && (!EnforceTurn || (moving * board[dragIndex] > 0))) {
             let m;
@@ -256,11 +256,11 @@ function mouseUp(event) {
 }
 function keyDown(event) {
     console.log(event.code.toString());
-    if (event.code.toString() == 'ArrowLeft') {
+    if (event.code.toString() === 'ArrowLeft') {
         worker.postMessage({messageType: 'ArrowLeft'})
-    } else if (event.code.toString() == 'ArrowRight') {
+    } else if (event.code.toString() === 'ArrowRight') {
         worker.postMessage({messageType: 'ArrowRight'})
-    } else if (event.code.toString() == 'KeyS') {
+    } else if (event.code.toString() === 'KeyS') {
         simulationCount = 0;
         simulateGame()
     }
@@ -281,7 +281,7 @@ function animateMove() {
     contextPieceHeld.clearRect(0, 0, canvasPieces.width, canvasPieces.height);
     for (let a = 0; a < animations.length; a++) {
         let animation = animations[a];
-        if (animation.animationType == 'captured') {
+        if (animation.animationType === 'captured') {
             if (animation.animationData[2] > 0) {
                 //reduce delay
                 animation.animationData[2] -= 1;
@@ -300,7 +300,7 @@ function animateMove() {
                     animations.splice(a, 1)
                 }
             }
-        } else if (animation.animationType == 'translation') {
+        } else if (animation.animationType === 'translation') {
             if (animation.animationData.length > 0) {
                 let coords = animation.animationData.shift();
                 drawPiece(coords[0], coords[1], animation.animatedItem, true);
@@ -323,11 +323,11 @@ function animateMove() {
 
 function workerMessage(event) {
     let message = event.data;
-    if (message.messageType == 'playerMoveResponse') {
+    if (message.messageType === 'playerMoveResponse') {
         board = message.board;
         chainCapturePaths = message.chainCapturePaths;
         moving = message.moving;
-        if (message.capturedCoords.length == 1) {
+        if (message.capturedCoords.length === 1) {
             animations.push({animationType: 'captured', animationData: message.capturedCoords[0]});
             tempBoard = board.slice(0);
             tempBoard[message.blankSquare] = 0;
@@ -338,10 +338,10 @@ function workerMessage(event) {
         }
         updateCanvas();
         //workerComplete = true
-    } else if (message.messageType == 'updateValidMoves') {
+    } else if (message.messageType === 'updateValidMoves') {
         validMoves = message.validMoves;
         workerComplete = true;
-    } else if (message.messageType == 'computerMove') {
+    } else if (message.messageType === 'computerMove') {
         let newInterval = setInterval(function () {
             if (!animationsInProgress) {
                 animationsInProgress = true;
@@ -369,7 +369,7 @@ function workerMessage(event) {
             }
         }, 20);
         //followed by updateValidMoves
-    } else if (message.messageType == 'ArrowResponse') {
+    } else if (message.messageType === 'ArrowResponse') {
         board = message.board;
         chainCapturePaths = message.chainCapturePaths;
         moving = message.moving;
@@ -387,7 +387,7 @@ function simulateGame() {
             clearInterval(wait);
             if (validMoves.length > 0 && simulationCount < 80) {
                 simulateGame()
-            } else if (simulationCount == 80) {
+            } else if (simulationCount === 80) {
                 console.log('80 moves complete')
             }
         }

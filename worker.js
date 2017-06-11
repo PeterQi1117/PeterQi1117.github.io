@@ -18,7 +18,7 @@ let savesCounter = 0;
 function __generateCoordTables() {
     let boardSpace = [];
     for (let y = 0; y <= 7; y++) {
-        if (y % 2 == 0) {
+        if (y % 2 === 0) {
             for (let x of [1, 3, 5, 7]) {
                 boardSpace.push({
                     x: x,
@@ -44,13 +44,13 @@ function _generateMovesTable() {
         let pMoves = [];
         let pJumps = [];
         if (0 <= x - 1 && x - 1 <= 7 && 0 <= y - 1 && y - 1 <= 7) {
-            if (Math.floor(square / 4) % 2 == 0) {
+            if (Math.floor(square / 4) % 2 === 0) {
                 pMoves.push(square - 4)
             } else {
                 pMoves.push(square - 5)
             }
             if (0 <= x - 2 && x - 2 <= 7 && 0 <= y - 2 && y - 2 <= 7) {
-                if (Math.floor(square / 4) % 2 == 0) {
+                if (Math.floor(square / 4) % 2 === 0) {
                     pJumps.push([square - 4, square - 4 - 5])
                 } else {
                     pJumps.push([square - 5, square - 5 - 4])
@@ -58,13 +58,13 @@ function _generateMovesTable() {
             }
         }
         if (0 <= x + 1 && x + 1 <= 7 && 0 <= y - 1 && y - 1 <= 7) {
-            if (Math.floor(square / 4) % 2 == 0) {
+            if (Math.floor(square / 4) % 2 === 0) {
                 pMoves.push(square - 3)
             } else {
                 pMoves.push(square - 4)
             }
             if (0 <= x + 2 && x + 2 <= 7 && 0 <= y - 2 && y - 2 <= 7) {
-                if (Math.floor(square / 4) % 2 == 0) {
+                if (Math.floor(square / 4) % 2 === 0) {
                     pJumps.push([square - 3, square - 3 - 4])
                 } else {
                     pJumps.push([square - 4, square - 4 - 3])
@@ -76,13 +76,13 @@ function _generateMovesTable() {
         let nMoves = [];
         let nJumps = [];
         if (0 <= x - 1 && x - 1 <= 7 && 0 <= y + 1 && y + 1 <= 7) {
-            if (Math.floor(square / 4) % 2 == 0) {
+            if (Math.floor(square / 4) % 2 === 0) {
                 nMoves.push(square + 4)
             } else {
                 nMoves.push(square + 3)
             }
             if (0 <= x - 2 && x - 2 <= 7 && 0 <= y + 2 && y + 2 <= 7) {
-                if (Math.floor(square / 4) % 2 == 0) {
+                if (Math.floor(square / 4) % 2 === 0) {
                     nJumps.push([square + 4, square + 4 + 3])
                 } else {
                     nJumps.push([square + 3, square + 3 + 4])
@@ -90,13 +90,13 @@ function _generateMovesTable() {
             }
         }
         if (0 <= x + 1 && x + 1 <= 7 && 0 <= y + 1 && y + 1 <= 7) {
-            if (Math.floor(square / 4) % 2 == 0) {
+            if (Math.floor(square / 4) % 2 === 0) {
                 nMoves.push(square + 5)
             } else {
                 nMoves.push(square + 4)
             }
             if (0 <= x + 2 && x + 2 <= 7 && 0 <= y + 2 && y + 2 <= 7) {
-                if (Math.floor(square / 4) % 2 == 0) {
+                if (Math.floor(square / 4) % 2 === 0) {
                     nJumps.push([square + 5, square + 5 + 4])
                 } else {
                     nJumps.push([square + 4, square + 4 + 5])
@@ -116,7 +116,7 @@ function _generateDistanceChart() {
         holder.push((n - 18).toString());
         holder.push((n - 27).toString());
         for (let s of holder) {
-            if (s == '3') {
+            if (s === '3') {
                 s = '03'
             }
             diagonalPositionArray.push([s[0], s[1]])
@@ -133,22 +133,22 @@ function _generateDistanceChart() {
 }
 function _determineMoveValidity(origin, adjacent, capture = -1, chainCheck = true, b = board) {
     if (chainCheck) {
-        if (capture == -1) {
-            return (!chainCapturePaths && b[adjacent] == 0);
+        if (capture === -1) {
+            return (!chainCapturePaths && b[adjacent] === 0);
         } else {
-            return (b[capture] == 0
+            return (b[capture] === 0
             && b[origin] * b[adjacent] < 0
             && (!chainCapturePaths || chainCapturePaths.some(function (path) {
-                return capture == path[1]
+                return capture === path[1]
             })))
         }
     } else {
-        return (b[capture] == 0
+        return (b[capture] === 0
         && b[origin] * b[adjacent] < 0)
     }
 }
 function _king(index, piece) {
-    if ((index <= 3 && piece == 1) || (index >= 28 && piece == -1)) {
+    if ((index <= 3 && piece === 1) || (index >= 28 && piece === -1)) {
         board[index] = board[index] * kingWeight;
         return true
     } else {
@@ -158,16 +158,16 @@ function _king(index, piece) {
 function _findCapturesFromIndex(index) {
     let piece = board[index];
     let searchIn;
-    if (piece == 1) {
+    if (piece === 1) {
         searchIn = movesTable.pj[index].slice(0)
-    } else if (piece == -1) {
+    } else if (piece === -1) {
         searchIn = movesTable.nj[index].slice(0)
     } else {
         searchIn = movesTable.pj[index].slice(0);
         searchIn = searchIn.concat(movesTable.nj[index])
     }
     return searchIn.filter(function (path) {
-        return _determineMoveValidity(index, path[0], path[1], false) == true
+        return _determineMoveValidity(index, path[0], path[1], false) === true
     });
 }
 function findAllMoves(b = board) {
@@ -184,7 +184,7 @@ function findAllMoves(b = board) {
     }
     for (let index = 0; index <= 31; index++) {
         if (moving * b[index] > 0) {
-            if (b[index] == 1 || b[index] == -1) {
+            if (b[index] === 1 || b[index] === -1) {
                 for (let capture of captures[index]) {
                     if (_determineMoveValidity(index, capture[0], capture[1], true)) {
                         validCaptures.push([index, capture[0], capture[1]])
@@ -197,8 +197,8 @@ function findAllMoves(b = board) {
                     }
                 }
             }
-            if (validCaptures.length == 0) {
-                if (b[index] == 1 || b[index] == -1) {
+            if (validCaptures.length === 0) {
+                if (b[index] === 1 || b[index] === -1) {
                     for (let move of moves[index]) {
                         if (_determineMoveValidity(index, move, -1, true)) {
                             validMoves.push([index, move])
@@ -214,7 +214,7 @@ function findAllMoves(b = board) {
             }
         }
     }
-    if (validCaptures.length == 0) {
+    if (validCaptures.length === 0) {
         return validMoves
     } else {
         return validCaptures
@@ -223,7 +223,7 @@ function findAllMoves(b = board) {
 function sumDistances(b = board) {
     let sum = 0;
     for (let index = 0; index <= 31; index++) {
-        if (b[index] != 0) {
+        if (b[index] !== 0) {
             for (let indexB = 0; indexB <= 31; indexB++) {
                 if (b[index] * b[indexB] < -kingWeight) {
                     sum += 2 * (distanceChart[index][indexB])
@@ -248,42 +248,42 @@ function evaluate(b = board) {
     }
     //detect forward progress
     for (let index = 0; index <= 3; index++) {
-        if (Math.abs(b[index]) == 1) {
+        if (Math.abs(b[index]) === 1) {
             sum -= 6 * b[index]
         }
     }
     for (let index = 4; index <= 7; index++) {
-        if (Math.abs(b[index]) == 1) {
+        if (Math.abs(b[index]) === 1) {
             sum += 5 * b[index]
         }
     }
     for (let index = 8; index <= 11; index++) {
-        if (Math.abs(b[index]) == 1) {
+        if (Math.abs(b[index]) === 1) {
             sum += 3 * b[index]
         }
     }
     for (let index = 12; index <= 15; index++) {
-        if (Math.abs(b[index]) == 1) {
+        if (Math.abs(b[index]) === 1) {
             sum += 1 * b[index]
         }
     }
     for (let index = 16; index <= 19; index++) {
-        if (Math.abs(b[index]) == 1) {
+        if (Math.abs(b[index]) === 1) {
             sum -= 1 * b[index]
         }
     }
     for (let index = 20; index <= 23; index++) {
-        if (Math.abs(b[index]) == 1) {
+        if (Math.abs(b[index]) === 1) {
             sum -= 3 * b[index]
         }
     }
     for (let index = 24; index <= 27; index++) {
-        if (Math.abs(b[index]) == 1) {
+        if (Math.abs(b[index]) === 1) {
             sum -= 5 * b[index]
         }
     }
     for (let index = 28; index <= 31; index++) {
-        if (Math.abs(b[index]) == 1) {
+        if (Math.abs(b[index]) === 1) {
             sum -= 6
         }
     }
@@ -300,7 +300,7 @@ function miniMax(moveSet, d = (depth + 1)) {
         implementMove(m);
         let allMoves = findAllMoves();
         //check for no moves
-        if (allMoves.length != 0) {
+        if (allMoves.length !== 0) {
             //recurse
             if (d > 0) {
                 results.push(miniMax(allMoves, d));
@@ -324,7 +324,7 @@ function miniMax(moveSet, d = (depth + 1)) {
         //restore board
         restoreState(storedState);
     }
-    if (d == depth) {
+    if (d === depth) {
         if (moving > 0) {
             return results.indexOf(Math.max(...results));
         } else {
@@ -341,7 +341,7 @@ function miniMax(moveSet, d = (depth + 1)) {
 function implementMove(m) {
     let piece = board[m[0]];
     board[m[0]] = 0;
-    if (m.length == 3) {
+    if (m.length === 3) {
         board[m[1]] = 0;
         board[m[2]] = piece;
         if (_king(m[2], piece)) {
@@ -349,7 +349,7 @@ function implementMove(m) {
             chainCapturePaths = false;
         } else {
             let potentialCaptures = _findCapturesFromIndex(m[2]);
-            if (potentialCaptures.length == 0) {
+            if (potentialCaptures.length === 0) {
                 moving = -moving;
                 chainCapturePaths = false;
             } else {
@@ -386,7 +386,7 @@ _generateDistanceChart();
 
 function coordsFromIndex(index) {
     let gridPosition;
-    if (Math.floor(index / 4) % 2 != 0) {
+    if (Math.floor(index / 4) % 2 !== 0) {
         gridPosition = [2 * (index % 4), Math.floor(index / 4)];
     } else {
         gridPosition = [2 * (index % 4) + 1, Math.floor(index / 4)];
@@ -398,14 +398,14 @@ function move() {
     let moveFound = allMoves[miniMax(allMoves)];
     pieceMoved = board[moveFound[0]];
     blankAnimationSquares.push(moveFound[moveFound.length - 1]);
-    if (moveFound.length == 2) {
+    if (moveFound.length === 2) {
         translationCoords.push([coordsFromIndex(moveFound[0]), coordsFromIndex(moveFound[1])]);
     } else {
         translationCoords.push([coordsFromIndex(moveFound[0]), coordsFromIndex(moveFound[2])]);
         capturedCoords.push([coordsFromIndex(moveFound[1]), board[moveFound[1]]])
     }
     implementMove(moveFound);
-    if (chainCapturePaths != false) {
+    if (chainCapturePaths !== false) {
         move()
     }
 }
@@ -463,14 +463,14 @@ function prepareTranslationAnimation() {
 onmessage = function (event) {
     let message = event.data;
     //this.postMessage(message);
-    if (message.messageType == 'initiate') {
+    if (message.messageType === 'initiate') {
         board = message.board;
         squareWidth = message.squareWidth;
         saves.push(storeState());
         this.postMessage({messageType: 'updateValidMoves', validMoves: findAllMoves()});
-    } else if (message.messageType == 'playerMove') {
+    } else if (message.messageType === 'playerMove') {
 
-        if (message.playerMove.length == 3) {
+        if (message.playerMove.length === 3) {
             capturedCoords.push([coordsFromIndex(message.playerMove[1]), board[message.playerMove[1]]]);
             prepareCaptureAnimation();
         }
@@ -484,7 +484,7 @@ onmessage = function (event) {
             blankSquare: message.playerMove[1],
         });
         this.postMessage({messageType: 'updateValidMoves', validMoves: findAllMoves()});
-    } else if (message.messageType == 'requestComputerMove') {
+    } else if (message.messageType === 'requestComputerMove') {
         move();
         translationCoords = prepareTranslationAnimation();
         prepareCaptureAnimation();
@@ -504,7 +504,7 @@ onmessage = function (event) {
             pieceMoved: pieceMoved
         });
         this.postMessage({messageType: 'updateValidMoves', validMoves: findAllMoves()});
-    } else if (message.messageType == 'ArrowLeft') {
+    } else if (message.messageType === 'ArrowLeft') {
         if (savesCounter > 0) {
             savesCounter -= 1;
             restoreState(saves[savesCounter]);
@@ -516,7 +516,7 @@ onmessage = function (event) {
             });
             this.postMessage({messageType: 'updateValidMoves', validMoves: findAllMoves()});
         }
-    } else if (message.messageType == 'ArrowRight') {
+    } else if (message.messageType === 'ArrowRight') {
         if (savesCounter + 1 < saves.length) {
             savesCounter += 1;
             restoreState(saves[savesCounter]);

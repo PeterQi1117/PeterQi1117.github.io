@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Checkers</title>
+</head>
+<body style="background-color: rgb(200,200,200);">
+<div style="background-color: transparent; text-align: center; display: inline-block; width: 100%; height: 850px; line-height: 850px;">
+    <div style="display: inline-block; width:660px; height: 660px; vertical-align: middle; position: relative; line-height: normal;">
+        <canvas style="height: 560px; width: 560px; z-index: 0;left: 0; top: 0;position: absolute;"
+                id="canvas-board"></canvas>
+        <canvas style="height: 560px; width: 560px; z-index: 1;left: 0; top: 0;position: absolute;"
+                id="canvas-pieces"></canvas>
+        <canvas style="height: 560px; width: 560px; z-index: 2;left: 0; top: 0;position: absolute;"
+                id="canvas-piece-held"></canvas>
+    </div>
+</div>
+<script id="worker" type="javascript/worker">
+    let board = [];
+    let chainCapturePaths = false;
+    let moving = 1;
+
+    let movesTable = {pm: [], pj: [], nm: [], nj: []};
+    let distanceChart = [];
+
+    let pieceMoved;
+    let blankAnimationSquares = [];
+    let translationCoords = [];
+    let capturedCoords = [];
+
+    let squareWidth = 0;
+
+    let saves = [];
+    let savesCounter = 0;
+
+    function __generateCoordTables() {
+        let boardSpace = [];
+        for (let y = 0; y <= 7; y++) {
+            if (y % 2 === 0) {
+                for (let x of [1, 3, 5, 7]) {
+                    boardSpace.push({
+                        x: x,
+                        y: y
+                    })
+                }
+            } else {
+                for (let x of [0, 2, 4, 6]) {
+                    boardSpace.push({
+                        x: x,
+                        y: y
+                    })
+                }
+            }
+        }
+        return boardSpace
+    }
+    function _generateMovesTable() {
+        let coordTable = __generateCoordTables();
+        for (let square = 0; square <= 31; square++) {
+            let x = coordTable[square].x;
+            let y = coordTable[square].y;
+            let pMoves = [];
+            let pJumps = [];
+            if (0 <= x - 1 && x - 1 <= 7 && 0 <= y - 1 && y - 1 <= 7) {
+                if (Math.floor(square / 4) % 2 === 0) {
+                    pMoves.push(square - 4)
+                } else {
+                    pMoves.push(square - 5)
+                }
+                if (0 <= x - 2 && x - 2 <= 7 && 0 <= y - 2 && y - 2 <= 7) {
+                    if (Math.floor(square / 4) % 2 === 0) {
+                        pJumps.push([square - 4, square - 4 - 5])
+                    } else {
+                        pJumps.push([square - 5, square - 5 - 4])
+                    }
+                }
+            }
+            if (0 <= x + 1 && x + 1 <= 7 && 0 <= y - 1 && y - 1 <= 7) {
+                if (Math.floor(square / 4) % 2 === 0) {
+                    pMoves.push(square - 3)
+                } else {
+                    pMoves.push(square - 4)
+                }
+                if (0 <= x + 2 && x + 2 <= 7 && 0 <= y - 2 && y - 2 <= 7) {
+                    if (Math.floor(square / 4) % 2 === 0) {
+                        pJumps.push([square - 3, square - 3 - 4])
+                    } else {
+                        pJumps.push([square - 4, square - 4 - 3])
+                    }
+                }
+            }
+            movesTable.pm.push(pMoves);
+            movesTable.pj.push(pJumps);
+            let nMoves = [];
+            let nJumps = [];
+            if (0 <= x - 1 && x - 1 <= 7 && 0 <= y + 1 && y + 1 <= 7) {
+                if (Math.floor(square / 4) % 2 === 0) {
+                    nMoves.push(square + 4)
+                } else {
+                    nMoves.push(square + 3)
+                }
+                if (0 <= x - 2 && x - 2 <= 7 && 0 <= y + 2 && y + 2 <= 7) {
+                    if (Math.floor(square / 4) % 2 === 0) {
+                        nJumps.push([square + 4, square + 4 + 3])
+                    } else {
+                        nJumps.push([square + 3, square + 3 + 4])
+                    }
+                }
+            }
+            if (0 <= x + 1 && x + 1 <= 7 && 0 <= y + 1 && y + 1 <= 7) {
+                if (Math.floor(square / 4) % 2 === 0) {
+                    nMoves.push(square + 5)
+                } else {
+                    nMoves.push(square + 4)
+                }
+                if (0 <= x + 2 && x + 2 <= 7 && 0 <= y + 2 && y + 2 <= 7) {
+                    if (Math.floor(square / 4) % 2 === 0) {
+                        nJumps.push([square + 5, square + 5 + 4])
+                    } else {
+                        nJumps.push([square + 4, square + 4 + 5])
+                    }
+                }
+            }
+            movesTable.nm.push(nMoves);
+            movesTable.nj.push(nJumps);
+        }
+    }
+    function _generateDistanceChart() {
+        let diagonalPositionArray = [];
+        for (let n of [30, 40, 41, 51, 52, 62, 63, 73]) {
+            let holder = [];
+            holder.push(n.toString());
+            holder.push((n - 9).toString());
+            holder.push((n - 18).toString());
+            holder.push((n - 27).toString());
+            for (let s of holder) {
+                if (s === '3') {
+                    s = '03'
+                }
+                diagonalPositionArray.push([s[0], s[1]])
+            }
+        }
+        for (let indexA = 0; indexA <= 31; indexA++) {
+            let innerArray = [];
+            for (let indexB = 0; indexB <= 31; indexB++) {
+                innerArray.push((Math.abs(diagonalPositionArray[indexA][0] - diagonalPositionArray[indexB][0]) +
+                Math.abs(diagonalPositionArray[indexA][1] - diagonalPositionArray[indexB][1])))
+            }
+            distanceChart.push(innerArray)
+        }
+    }
+    function _determineMoveValidity(origin, adjacent, capture = -1, chainCheck = true, b = board) {
+        if (chainCheck) {
+            if (capture === -1) {
+                return (!chainCapturePaths && b[adjacent] === 0);
+            } else {
+                return (b[capture] === 0
+                && b[origin] * b[adjacent] < 0
+                && (!chainCapturePaths || chainCapturePaths.some(function (path) {
+                    return capture === path[1]
+                })))
+            }
+        } else {
+            return (b[capture] === 0
+            && b[origin] * b[adjacent] < 0)
+        }
+    }
+    function _king(index, piece) {
+        if ((index <= 3 && piece === 1) || (index >= 28 && piece === -1)) {
+            board[index] = board[index] * kingWeight;
+            return true
+        } else {
+            return false
+        }
+    }
+    function _findCapturesFromIndex(index) {
+        let piece = board[index];
+        let searchIn;
+        if (piece === 1) {
+            searchIn = movesTable.pj[index].slice(0)
+        } else if (piece === -1) {
+            searchIn = movesTable.nj[index].slice(0)
+        } else {
+            searchIn = movesTable.pj[index].slice(0);
+            searchIn = searchIn.concat(movesTable.nj[index])
+        }
+        return searchIn.filter(function (path) {
+            return _determineMoveValidity(index, path[0], path[1], false) === true
+        });
+    }
+    function findAllMoves(b = board) {
+        let captures;
+        let moves;
+        let validCaptures = [];
+        let validMoves = [];
+        if (moving > 0) {
+            captures = movesTable.pj.slice(0);
+            moves = movesTable.pm.slice(0);
+        } else {
+            captures = movesTable.nj.slice(0);
+            moves = movesTable.nm.slice(0);
+        }
+        for (let index = 0; index <= 31; index++) {
+            if (moving * b[index] > 0) {
+                if (b[index] === 1 || b[index] === -1) {
+                    for (let capture of captures[index]) {
+                        if (_determineMoveValidity(index, capture[0], capture[1], true)) {
+                            validCaptures.push([index, capture[0], capture[1]])
+                        }
+                    }
+                } else {
+                    for (let capture of movesTable.pj.slice(0)[index].concat(movesTable.nj.slice(0)[index])) {
+                        if (_determineMoveValidity(index, capture[0], capture[1], true)) {
+                            validCaptures.push([index, capture[0], capture[1]])
+                        }
+                    }
+                }
+                if (validCaptures.length === 0) {
+                    if (b[index] === 1 || b[index] === -1) {
+                        for (let move of moves[index]) {
+                            if (_determineMoveValidity(index, move, -1, true)) {
+                                validMoves.push([index, move])
+                            }
+                        }
+                    } else {
+                        for (let move of movesTable.pm.slice(0)[index].concat(movesTable.nm.slice(0)[index])) {
+                            if (_determineMoveValidity(index, move, -1, true)) {
+                                validMoves.push([index, move])
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (validCaptures.length === 0) {
+            return validMoves
+        } else {
+            return validCaptures
+        }
+    }
+    function sumDistances(b = board) {
+        let sum = 0;
+        for (let index = 0; index <= 31; index++) {
+            if (b[index] !== 0) {
+                for (let indexB = 0; indexB <= 31; indexB++) {
+                    if (b[index] * b[indexB] < -kingWeight) {
+                        sum += 2 * (distanceChart[index][indexB])
+                    } else if (b[index] * b[indexB] < 0) {
+                        sum += (distanceChart[index][indexB])
+                    }
+                }
+            }
+        }
+        return sum
+    }
+    function evaluate(b = board) {
+        //sum pieces
+        let sum = 1000 * b.reduce(function (sum, piece) {
+                return sum + piece
+            }, 0);
+        //sum distances between opposing pieces
+        if (sum < 0) {
+            sum += sumDistances() / 10000
+        } else if (sum > 0) {
+            sum -= sumDistances() / 10000
+        }
+        //detect forward progress
+        for (let index = 0; index <= 3; index++) {
+            if (Math.abs(b[index]) === 1) {
+                sum -= 6 * b[index]
+            }
+        }
+        for (let index = 4; index <= 7; index++) {
+            if (Math.abs(b[index]) === 1) {
+                sum += 5 * b[index]
+            }
+        }
+        for (let index = 8; index <= 11; index++) {
+            if (Math.abs(b[index]) === 1) {
+                sum += 3 * b[index]
+            }
+        }
+        for (let index = 12; index <= 15; index++) {
+            if (Math.abs(b[index]) === 1) {
+                sum += 1 * b[index]
+            }
+        }
+        for (let index = 16; index <= 19; index++) {
+            if (Math.abs(b[index]) === 1) {
+                sum -= 1 * b[index]
+            }
+        }
+        for (let index = 20; index <= 23; index++) {
+            if (Math.abs(b[index]) === 1) {
+                sum -= 3 * b[index]
+            }
+        }
+        for (let index = 24; index <= 27; index++) {
+            if (Math.abs(b[index]) === 1) {
+                sum -= 5 * b[index]
+            }
+        }
+        for (let index = 28; index <= 31; index++) {
+            if (Math.abs(b[index]) === 1) {
+                sum -= 6
+            }
+        }
+        return sum;
+    }
+    let kingWeight = 1.9;
+    let depth = 5;
+    function miniMax(moveSet, d = (depth + 1)) {
+        d -= 1;
+        let results = [];
+        for (let m of moveSet) {
+            //save board
+            let storedState = storeState();
+            implementMove(m);
+            let allMoves = findAllMoves();
+            //check for no moves
+            if (allMoves.length !== 0) {
+                //recurse
+                if (d > 0) {
+                    results.push(miniMax(allMoves, d));
+                }
+                else {
+                    results.push(evaluate());
+                }
+            } else {
+                //terminal node
+                if (board.some(function (square) {
+                        return (moving * square > 0)
+                    })
+                    && board.some(function (square) {
+                        return (moving * square < 0)
+                    })) {
+                    results.push(0);
+                } else {
+                    results.push(10 * evaluate())
+                }
+            }
+            //restore board
+            restoreState(storedState);
+        }
+        if (d === depth) {
+            if (moving > 0) {
+                return results.indexOf(Math.max(...results));
+            } else {
+                return results.indexOf(Math.min(...results));
+            }
+        } else {
+            if (moving > 0) {
+                return Math.max(...results);
+            } else {
+                return Math.min(...results);
+            }
+        }
+    }
+    function implementMove(m) {
+        let piece = board[m[0]];
+        board[m[0]] = 0;
+        if (m.length === 3) {
+            board[m[1]] = 0;
+            board[m[2]] = piece;
+            if (_king(m[2], piece)) {
+                moving = -moving;
+                chainCapturePaths = false;
+            } else {
+                let potentialCaptures = _findCapturesFromIndex(m[2]);
+                if (potentialCaptures.length === 0) {
+                    moving = -moving;
+                    chainCapturePaths = false;
+                } else {
+                    chainCapturePaths = potentialCaptures;
+                }
+            }
+        } else {
+            board[m[1]] = piece;
+            _king(m[1], piece);
+            moving = -moving;
+            chainCapturePaths = false;
+        }
+    }
+
+    function storeState() {
+        if (chainCapturePaths) {
+            return [board.slice(0), chainCapturePaths.slice(0), moving]
+        } else {
+            return [board.slice(0), false, moving]
+        }
+    }
+    function restoreState(state) {
+        board = state[0].slice(0);
+        if (state[1]) {
+            chainCapturePaths = state[1];
+        } else {
+            chainCapturePaths = false
+        }
+        moving = state[2];
+    }
+
+    _generateMovesTable();
+    _generateDistanceChart();
+
+    function coordsFromIndex(index) {
+        let gridPosition;
+        if (Math.floor(index / 4) % 2 !== 0) {
+            gridPosition = [2 * (index % 4), Math.floor(index / 4)];
+        } else {
+            gridPosition = [2 * (index % 4) + 1, Math.floor(index / 4)];
+        }
+        return [gridPosition[0] * squareWidth + squareWidth / 2, gridPosition[1] * squareWidth + squareWidth / 2]
+    }
+    function move() {
+        let allMoves = findAllMoves();
+        let moveFound = allMoves[miniMax(allMoves)];
+        pieceMoved = board[moveFound[0]];
+        blankAnimationSquares.push(moveFound[moveFound.length - 1]);
+        if (moveFound.length === 2) {
+            translationCoords.push([coordsFromIndex(moveFound[0]), coordsFromIndex(moveFound[1])]);
+        } else {
+            translationCoords.push([coordsFromIndex(moveFound[0]), coordsFromIndex(moveFound[2])]);
+            capturedCoords.push([coordsFromIndex(moveFound[1]), board[moveFound[1]]])
+        }
+        implementMove(moveFound);
+        if (chainCapturePaths !== false) {
+            move()
+        }
+    }
+
+    function prepareCaptureAnimation() {
+        //call after prepare translation
+        let translationLength = translationCoords.length;
+        for (let item of capturedCoords) {
+            item.push(translationLength);
+            item.push(1)
+        }
+    }
+
+    function prepareTranslationAnimation() {
+        let resultCoordArray = [];
+        //
+        let secondsPerMove = (1 / 6);
+        let framesPerMove = 60 * secondsPerMove;
+        let totalFrames = translationCoords.length * framesPerMove;
+        let translationDistancePerMove = Math.abs(translationCoords[0][0][0] - translationCoords[0][1][0]); //single dimension
+        let totalTranslationDistance = translationDistancePerMove * translationCoords.length;
+        let averageDistancePerFrame = totalTranslationDistance / totalFrames; // single-dimension
+        //
+        let destinationCoords = [];
+        for (let coordSet of translationCoords) {
+            destinationCoords.push(coordSet[0])
+        }
+        destinationCoords.push(translationCoords[translationCoords.length - 1][1]);
+        //
+        //let startingCoord = destinationCoords[0];
+        for (let coord = 0; coord < destinationCoords.length - 1; coord++) {
+            let dx;
+            let dy;
+            if (destinationCoords[coord][0] < destinationCoords[coord + 1][0]) {
+                dx = averageDistancePerFrame;
+            } else {
+                dx = -averageDistancePerFrame;
+            }
+            if (destinationCoords[coord][1] < destinationCoords[coord + 1][1]) {
+                dy = averageDistancePerFrame;
+            } else {
+                dy = -averageDistancePerFrame;
+            }
+            let remainingDistance = translationDistancePerMove;
+            resultCoordArray.push(destinationCoords[coord]);
+            while (remainingDistance > 0) {
+                remainingDistance -= Math.abs(dx);
+                let lastCoords = resultCoordArray[resultCoordArray.length - 1].slice(0);
+                resultCoordArray.push([lastCoords[0] + dx, lastCoords[1] + dy])
+            }
+        }
+        return resultCoordArray
+    }
+
+    onmessage = function (event) {
+        let message = event.data;
+        //this.postMessage(message);
+        if (message.messageType === 'initiate') {
+            board = message.board;
+            squareWidth = message.squareWidth;
+            saves.push(storeState());
+            this.postMessage({messageType: 'updateValidMoves', validMoves: findAllMoves()});
+        } else if (message.messageType === 'playerMove') {
+
+            if (message.playerMove.length === 3) {
+                capturedCoords.push([coordsFromIndex(message.playerMove[1]), board[message.playerMove[1]]]);
+                prepareCaptureAnimation();
+            }
+            implementMove(message.playerMove);
+            this.postMessage({
+                messageType: 'playerMoveResponse',
+                board: board,
+                chainCapturePaths: chainCapturePaths,
+                moving: moving,
+                capturedCoords: capturedCoords,
+                blankSquare: message.playerMove[1],
+            });
+            this.postMessage({messageType: 'updateValidMoves', validMoves: findAllMoves()});
+        } else if (message.messageType === 'requestComputerMove') {
+            move();
+            translationCoords = prepareTranslationAnimation();
+            prepareCaptureAnimation();
+            let blankSquare = blankAnimationSquares[blankAnimationSquares.length - 1];
+            //
+            saves.splice(savesCounter + 1, saves.length - savesCounter + 1, storeState());
+            savesCounter += 1;
+            //
+            this.postMessage({
+                messageType: 'computerMove',
+                board: board,
+                chainCapturePaths: chainCapturePaths,
+                moving: moving,
+                blankSquare: blankSquare,
+                translationCoord: translationCoords,
+                capturedCoords: capturedCoords,
+                pieceMoved: pieceMoved
+            });
+            this.postMessage({messageType: 'updateValidMoves', validMoves: findAllMoves()});
+        } else if (message.messageType === 'ArrowLeft') {
+            if (savesCounter > 0) {
+                savesCounter -= 1;
+                restoreState(saves[savesCounter]);
+                this.postMessage({
+                    messageType: 'ArrowResponse',
+                    board: board,
+                    chainCapturePaths: chainCapturePaths,
+                    moving: moving
+                });
+                this.postMessage({messageType: 'updateValidMoves', validMoves: findAllMoves()});
+            }
+        } else if (message.messageType === 'ArrowRight') {
+            if (savesCounter + 1 < saves.length) {
+                savesCounter += 1;
+                restoreState(saves[savesCounter]);
+                this.postMessage({
+                    messageType: 'ArrowResponse',
+                    board: board,
+                    chainCapturePaths: chainCapturePaths,
+                    moving: moving
+                });
+                this.postMessage({messageType: 'updateValidMoves', validMoves: findAllMoves()});
+            }
+        }
+        blankAnimationSquares = [];
+        translationCoords = [];
+        capturedCoords = [];
+    };
+
+
+</script>
+
+<script>
+    let workerBlob = new Blob([
+        document.querySelector('#worker').textContent
+    ], {type: "text/javascript"});
+
+    let board = [];
+    let chainCapturePaths = false;
+    let moving = 1;
+    let worker = new Worker(window.URL.createObjectURL(workerBlob));
+    let workerComplete = false;
+
+    let canvasBoard = document.getElementById('canvas-board');
+    let canvasPieces = document.getElementById('canvas-pieces');
+    let canvasPieceHeld = document.getElementById('canvas-piece-held');
+    let contextBoard = canvasBoard.getContext("2d");
+    let contextPieces = canvasPieces.getContext('2d');
+    let contextPieceHeld = canvasPieceHeld.getContext('2d');
+    let boardWidth = canvasBoard.width = canvasPieces.width = canvasPieceHeld.width = canvasBoard.scrollWidth;
+    let boardHeight = canvasBoard.height = canvasPieces.height = canvasPieceHeld.height = canvasBoard.scrollHeight;
+    let squareWidth = boardWidth / 8;
+    let squareHeight = boardHeight / 8;
+    let defaultPieceRadius = 0.38;
+
+    let animations = [];
+    let animationsInProgress = false;
+    let fillInSquare = [];
+
+    let startingPositions = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+    let tempBoard = [];
+    let pieceHeld = 0;
+    let dragIndex = 0;
+    let dropIndex = 0;
+
+    let validMoves = [];
+
+    //let player = 1;
+    let EnforceTurn = true;
+    //let enforceRules = true;
+    let boardPadding = 50;
+    let shadowX = 0;
+    let shadowY = 0.5;
+    canvasBoard.style.padding = boardPadding.toString() + 'px';
+    canvasPieces.style.padding = boardPadding.toString() + 'px';
+    canvasPieceHeld.style.padding = boardPadding.toString() + 'px';
+    canvasBoard.style.boxShadow = shadowX.toString() + 'px ' + shadowY.toString() + 'px ' + '5px rgba(0,0,0,0.5)';
+    function drawBoard() {
+        let darkSquareColor = 'rgb(45,135,90)';
+        let lightSquareColor = 'rgb(225,225,222)';
+        canvasBoard.style.backgroundColor = lightSquareColor;
+        contextBoard.shadowColor = "transparent";
+        //context.shadowOffsetX = 0;
+        //context.shadowOffsetY = 0;
+        for (let x = 0; x <= 7; x++) {
+            for (let y = 0; y <= 7; y++) {
+                if ((x + y) % 2 === 0) {
+                    contextBoard.fillStyle = lightSquareColor; //'rgb(210,230,212)'
+                } else {
+                    contextBoard.fillStyle = darkSquareColor;
+                }
+                contextBoard.fillRect(x * squareWidth, y * squareHeight, squareWidth, squareHeight);
+            }
+        }
+        contextBoard.strokeStyle = darkSquareColor;
+        contextBoard.lineWidth = 1;
+        contextBoard.strokeRect(0, 0, squareWidth * 8, squareHeight * 8)
+    }
+    function drawPiece(x, y, color, raw_coords = false, radiusMultiplier = 1, animation = false) {
+        let radius = defaultPieceRadius * radiusMultiplier;
+        let context;
+        if (!raw_coords) {
+            context = contextPieces
+        } else {
+            context = contextPieceHeld
+        }
+        //
+        if (animation) {
+            context = contextPieceHeld
+        }
+        //
+        context.save();
+        let elevationMultiplier = 1.08;
+        context.shadowColor = 'rgba(0,0,0,0.4)';
+        context.shadowOffsetX = 0;
+        context.shadowOffsetY = 0.5;
+        if (color > 0) {
+            context.fillStyle = 'rgb(250,250,250)';
+        } else if (color < 0) {
+            context.fillStyle = 'rgb(188,65,55)';
+        } else {
+            return;
+        }
+        let centerX;
+        let centerY;
+        if (raw_coords) {
+            centerX = x;
+            centerY = y;
+        } else {
+            centerX = x * squareWidth + squareWidth * 0.5;
+            centerY = y * squareHeight + squareHeight * 0.5;
+            context.shadowBlur = 5
+        }
+        if (raw_coords && !animation) {
+            radius *= elevationMultiplier;
+            context.shadowBlur = 20;
+        }
+        context.beginPath();
+        context.arc(centerX, centerY, squareWidth * radius, 0, 2 * Math.PI, false);
+        context.fill();
+        if (color > 1 || color < -1) {
+            context.shadowColor = 'transparent';
+            context.strokeStyle = 'rgb(220,215,0)';
+            let sizeConstant = squareWidth * radius * 2;
+            if (raw_coords && !animation) {
+                sizeConstant *= elevationMultiplier;
+            }
+            let crownWidthHalf = sizeConstant * 0.18;
+            let crownHeight = sizeConstant * 0.13;
+            let crownBaseYOffset = sizeConstant * 0.06;
+            let crownOuterPointX = crownWidthHalf * 1.21;
+            let crownOuterPointY = crownHeight * 0.5;
+            let crownAdjacentPointX = crownOuterPointX * 0.6;
+            let crownAdjacentPointY = crownHeight - ((crownHeight - crownOuterPointY) / 2);
+            context.beginPath();
+            context.moveTo(centerX - crownWidthHalf, centerY + crownBaseYOffset);
+            context.lineTo(centerX - crownOuterPointX, centerY - crownOuterPointY);
+            context.quadraticCurveTo(centerX - crownOuterPointX / 1.5, centerY + crownHeight / 4,
+                centerX - crownAdjacentPointX, centerY - crownAdjacentPointY);
+            context.quadraticCurveTo(centerX - crownAdjacentPointX / 1.9, centerY + crownHeight / 3,
+                centerX, centerY - crownHeight);
+            context.quadraticCurveTo(centerX + crownAdjacentPointX / 1.9, centerY + crownHeight / 3,
+                centerX + crownAdjacentPointX, centerY - crownAdjacentPointY);
+            context.quadraticCurveTo(centerX + crownOuterPointX / 1.5, centerY + crownHeight / 4,
+                centerX + crownOuterPointX, centerY - crownOuterPointY);
+            context.lineTo(centerX + crownWidthHalf, centerY + crownBaseYOffset);
+            context.quadraticCurveTo(centerX, centerY + 1.3 * crownBaseYOffset,
+                centerX - crownWidthHalf, centerY + crownBaseYOffset);
+            context.closePath();
+            context.stroke();
+        }
+        context.restore();
+    }
+    function drawPieces(positionsArray) {
+        for (let square = 0; square <= 31; square++) {
+            if (Math.floor(square / 4) % 2 !== 0) {
+                drawPiece(2 * (square % 4), Math.floor(square / 4), positionsArray[square]);
+            } else {
+                drawPiece(2 * (square % 4) + 1, Math.floor(square / 4), positionsArray[square]);
+            }
+        }
+    }
+    function getMousePosition(event) {
+        let rect = canvasPieceHeld.getBoundingClientRect();
+        return {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top
+        }
+    }
+    function squareFromPosition(x_coord, y_coord) {
+        return {
+            x: Math.ceil((x_coord - boardPadding) / squareWidth) - 1,
+            y: Math.ceil((y_coord - boardPadding) / squareHeight) - 1
+        }
+    }
+    function indexFromSquare(x, y) {
+        if (y === 0) {
+            return Math.floor(x / 2)
+        } else if (y % 2 !== 0) {
+            return 4 * y - 1 + (x / 2) + 1
+        } else {
+            return 4 * y - 1 + Math.ceil(x / 2)
+        }
+    }
+
+    function findIntermediary(origin, target) {
+        let addNumber;
+        if (Math.abs(origin - target) === 7) {
+            if (Math.floor(origin / 4) % 2 === 0) {
+                addNumber = 4
+            } else {
+                addNumber = 3
+            }
+        } else {
+            if (Math.floor(origin / 4) % 2 === 0) {
+                addNumber = 5
+            } else {
+                addNumber = 4
+            }
+        }
+        if (origin < target) {
+            return (origin + addNumber)
+        } else {
+            return (target + addNumber)
+        }
+    }
+
+    function mouseDown(event) {
+        document.removeEventListener('keydown', keyDown);
+        let mousePosition = getMousePosition(event);
+        let square = squareFromPosition(mousePosition.x, mousePosition.y);
+        if ((square.x + square.y) % 2 !== 0) {
+            let index = dragIndex = indexFromSquare(square.x, square.y);
+            if (board[index] !== 0) {
+                canvasPieceHeld.addEventListener('mousemove', mouseMove);
+                document.addEventListener('mouseup', mouseUp);
+                tempBoard = board.slice(0);
+                tempBoard[index] = 0;
+                pieceHeld = board[index];
+                contextPieces.clearRect(0, 0, canvasPieces.width, canvasPieces.height);
+                drawPieces(tempBoard);
+                drawPiece(mousePosition.x - boardPadding, mousePosition.y - boardPadding, pieceHeld, true);
+            }
+        }
+    }
+    function mouseMove(event) {
+        let mousePosition = getMousePosition(event);
+        contextPieceHeld.clearRect(0, 0, canvasPieces.width, canvasPieces.height);
+        drawPiece(mousePosition.x - boardPadding, mousePosition.y - boardPadding, pieceHeld, true);
+    }
+    function mouseUp(event) {
+        canvasPieceHeld.removeEventListener('mousedown', mouseDown);
+        canvasPieceHeld.removeEventListener('mousemove', mouseMove);
+        canvasPieceHeld.removeEventListener('mouseup', mouseUp);
+        let mousePosition = getMousePosition(event);
+        let square = squareFromPosition(mousePosition.x, mousePosition.y);
+        if ((square.x + square.y) % 2 !== 0) {
+            dropIndex = indexFromSquare(square.x, square.y);
+            // post message check move validity
+            if (validMoves.some(function (move) {
+                    return (move[0] === dragIndex && move[move.length - 1] === dropIndex)
+                })
+                && (!EnforceTurn || (moving * board[dragIndex] > 0))) {
+                let m;
+                if (Math.abs(dragIndex - dropIndex) >= 7) {
+                    m = [dragIndex, findIntermediary(dragIndex, dropIndex), dropIndex];
+                } else {
+                    m = [dragIndex, dropIndex]
+                }
+                worker.postMessage({messageType: 'playerMove', playerMove: m});
+                workerComplete = false;
+                let interval = setInterval(function () { // wait for worker to update
+                    if (workerComplete) {
+                        clearInterval(interval);
+                        if (!chainCapturePaths) {
+                            workerComplete = false;
+                            worker.postMessage({messageType: 'requestComputerMove'});
+                        }
+                    }
+                }, 5);
+            } else {
+                updateCanvas();
+            }
+        } else {
+            updateCanvas();
+        }
+        canvasPieceHeld.addEventListener('mousedown', mouseDown);
+        document.addEventListener('keydown', keyDown);
+        pieceHeld = 0;
+    }
+    function keyDown(event) {
+        console.log(event.code.toString());
+        if (event.code.toString() === 'ArrowLeft') {
+            worker.postMessage({messageType: 'ArrowLeft'})
+        } else if (event.code.toString() === 'ArrowRight') {
+            worker.postMessage({messageType: 'ArrowRight'})
+        } else if (event.code.toString() === 'KeyS') {
+            simulationCount = 0;
+            simulateGame()
+        }
+    }
+
+    function updateCanvas() {
+        contextPieces.clearRect(0, 0, canvasPieces.width, canvasPieces.height);
+        contextPieceHeld.clearRect(0, 0, canvasPieces.width, canvasPieces.height);
+        drawPieces(board);
+    }
+    function resetBoard() {
+        board = startingPositions.slice(0);
+        drawBoard();
+        drawPieces(board);
+    }
+
+    function animateMove() {
+        contextPieceHeld.clearRect(0, 0, canvasPieces.width, canvasPieces.height);
+        for (let a = 0; a < animations.length; a++) {
+            let animation = animations[a];
+            if (animation.animationType === 'captured') {
+                if (animation.animationData[2] > 0) {
+                    //reduce delay
+                    animation.animationData[2] -= 1;
+                    //draw piece
+                    let coords = animation.animationData[0];
+                    let piece = animation.animationData[1];
+                    drawPiece(coords[0], coords[1], piece, true, 1, true);
+                } else {
+                    let size = animation.animationData[3];
+                    if (size > 0.1) {
+                        let coords = animation.animationData[0];
+                        let piece = animation.animationData[1];
+                        drawPiece(coords[0], coords[1], piece, true, size, true);
+                        animation.animationData[3] = Math.pow((size - 0.15), 1.1)
+                    } else {
+                        animations.splice(a, 1)
+                    }
+                }
+            } else if (animation.animationType === 'translation') {
+                if (animation.animationData.length > 0) {
+                    let coords = animation.animationData.shift();
+                    drawPiece(coords[0], coords[1], animation.animatedItem, true);
+                } else {
+                    animations.splice(a, 1);
+                    tempBoard[fillInSquare[0]] = fillInSquare[1];
+                    contextPieces.clearRect(0, 0, canvasPieces.width, canvasPieces.height);
+                    drawPieces(tempBoard);
+                    fillInSquare = []
+                }
+            }
+        }
+        if (animations.length > 0) {
+            requestAnimationFrame(animateMove)
+        } else {
+            updateCanvas();
+            animationsInProgress = false;
+        }
+    }
+
+    function workerMessage(event) {
+        let message = event.data;
+        if (message.messageType === 'playerMoveResponse') {
+            board = message.board;
+            chainCapturePaths = message.chainCapturePaths;
+            moving = message.moving;
+            if (message.capturedCoords.length === 1) {
+                animations.push({animationType: 'captured', animationData: message.capturedCoords[0]});
+                tempBoard = board.slice(0);
+                tempBoard[message.blankSquare] = 0;
+                animationsInProgress = true;
+                contextPieces.clearRect(0, 0, canvasPieces.width, canvasPieces.height);
+                drawPieces(tempBoard);
+                animateMove();
+            }
+            updateCanvas();
+            //workerComplete = true
+        } else if (message.messageType === 'updateValidMoves') {
+            validMoves = message.validMoves;
+            workerComplete = true;
+        } else if (message.messageType === 'computerMove') {
+            let newInterval = setInterval(function () {
+                if (!animationsInProgress) {
+                    animationsInProgress = true;
+                    board = message.board;
+                    chainCapturePaths = message.chainCapturePaths;
+                    moving = message.moving;
+                    tempBoard = board.slice(0);
+                    tempBoard[message.blankSquare] = 0;
+                    fillInSquare.push(message.blankSquare);
+                    fillInSquare.push(message.pieceMoved);
+                    animations = [];
+                    for (let animationData of message.capturedCoords) {
+                        // animationData : [coords, piece, delay, size]
+                        animations.push({animationType: 'captured', animationData: animationData});
+                    }
+                    animations.push({
+                        animationType: 'translation',
+                        animationData: message.translationCoord,
+                        animatedItem: message.pieceMoved
+                    });
+                    contextPieces.clearRect(0, 0, canvasPieces.width, canvasPieces.height);
+                    drawPieces(tempBoard);
+                    animateMove();
+                    clearInterval(newInterval)
+                }
+            }, 20);
+            //followed by updateValidMoves
+        } else if (message.messageType === 'ArrowResponse') {
+            board = message.board;
+            chainCapturePaths = message.chainCapturePaths;
+            moving = message.moving;
+            updateCanvas();
+        }
+    }
+
+    let simulationCount = 0;
+    function simulateGame() {
+        simulationCount += 1;
+        worker.postMessage({messageType: 'requestComputerMove'});
+        workerComplete = false;
+        let wait = setInterval(function () {
+            if (workerComplete && !animationsInProgress) {
+                clearInterval(wait);
+                if (validMoves.length > 0 && simulationCount < 80) {
+                    simulateGame()
+                } else if (simulationCount === 80) {
+                    console.log('80 moves complete')
+                }
+            }
+        }, 50)
+    }
+
+    //initiate
+    resetBoard();
+    canvasPieceHeld.addEventListener('mousedown', mouseDown);
+    document.addEventListener('keydown', keyDown);
+    worker.postMessage({messageType: 'initiate', squareWidth: squareWidth, board: startingPositions});
+    worker.addEventListener('message', workerMessage);
+</script>
+</body>
+</html>

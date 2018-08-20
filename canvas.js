@@ -43,7 +43,7 @@ canvasPieceHeld.style.padding = boardPadding.toString() + 'px';
 canvasBoard.style.boxShadow = shadowX.toString() + 'px ' + shadowY.toString() + 'px ' + '5px rgba(0,0,0,0.5)';
 function drawBoard() {
     let darkSquareColor = 'rgb(45,135,90)';
-    let lightSquareColor = 'rgb(225,225,222)';
+    let lightSquareColor = 'rgb(235,235,232)';
     canvasBoard.style.backgroundColor = lightSquareColor;
     contextBoard.shadowColor = "transparent";
     //context.shadowOffsetX = 0;
